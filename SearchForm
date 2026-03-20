@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <title>SunshineTr - Live Search</title>
+  <style>
+    body{font-family:Arial;padding:20px;transition:background 0.3s,color 0.3s;}
+    .card{max-width:800px;margin:auto;background:#fff;padding:20px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1);}
+    input{width:100%;padding:10px;margin:8px 0;border-radius:6px;border:1px solid #ccc;font-size:15px;}
+    button{background:#ff9800;color:white;padding:12px;border:none;border-radius:6px;cursor:pointer;margin-top:10px;font-size:16px;}
+    button:hover{background:#fb8c00;}
+    table{width:100%;border-collapse:collapse;margin-top:15px;}
+    th,td{border:1px solid #ddd;padding:8px;text-align:left;}
+    th{background:#ff9800;color:white;}
+    tr.highlight td{background:#ffeb3b;color:#000;}
+    #suggestBox div{padding:6px;cursor:pointer;}
+    #suggestBox div:hover{background:#f0f0f0;}
+    body.dark{background:#121212;color:#f5f5f5;}
+    body.dark .card{background:#1e1e1e;color:#f5f5f5;}
+    body.dark input{background:#2c2c2c;color:#f5f5f5;border:1px solid #444;}
+    body.dark th{background:#ffb74d;color:#000;}
+    body.dark #suggestBox div:hover{background:#333;}
+    .toggle{float:right;margin-bottom:10px;cursor:pointer;font-size:14px;}
+    .pagination{margin-top:10px;text-align:center;}
+    .pagination button{margin:2px;padding:6px 10px;font-size:14px;}
+  </style>
+</head>
+<body>
+<div class="card">
+  <span class="toggle" onclick="toggleDark()">🌙 Dark Mode</span>
+  <h2>Tra cứu Vị Trí Đứng by SunshineTr</h2>
+
+  <input id="hoTen" placeholder="Gõ Họ và tên..." oninput="liveSearch()">
+  <div id="suggestBox"></div>
+
+  <button onclick="exportCSV()">📥 Xuất Excel</button>
+
+  <p id="total"></p>
+  <div id="table"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+let currentData=[], headers=[], currentPage=1, rowsPerPage=20, keywords=[];
+
+function toggleDark(){
+  document.body.classList.toggle("dark");
+  localStorage.setItem("darkMode", document.body.classList.contains("dark"));
+}
+if(localStorage.getItem("darkMode")==="true") document.body.classList.add("dark");
+
+function liveSearch(){
+  const c={hoTen:hoTen.value};
+  google.script.run.withSuccessHandler(res=>{
+    headers=res.headers; currentData=res.data; currentPage=1; keywords=res.keywords;
+    total.innerText=`Tổng kết quả: ${res.total}`;
+    showPage(currentPage);
+  }).searchData(c);
+}
+
+function showPage(page){
+  const start=(page-1)*rowsPerPage,end=start+rowsPerPage;
+  const pageData=currentData.slice(start,end);
+  if(pageData.length===0){ table.innerHTML="<p>Không có kết quả</p>"; return; }
+
+  let html='<table><tr>'; headers.forEach(h=>html+=`<th>${h}</th>`); html+='</tr>';
+  pageData.forEach(r=>{
+    html+='<tr>';
+    r.forEach(c=>{
+      let cell=c||'';
+      keywords.forEach(k=>{ const regex=new RegExp(`(${k})`,'gi'); cell=cell.replace(regex,'<span style="background:#ffeb3b">$1</span>'); });
+      html+=`<td>${cell}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</table>'; table.innerHTML=html; renderPagination();
+}
+
+function renderPagination(){
+  const pageCount=Math.ceil(currentData.length/rowsPerPage); let html='';
+  for(let i=1;i<=pageCount;i++) html+=`<button onclick="goPage(${i})"${i===currentPage?' style="font-weight:bold;"':''}>${i}</button>`;
+  pagination.innerHTML=html;
+}
+function goPage(p){ currentPage=p; showPage(p); }
+
+function exportCSV(){
+  if(currentData.length===0) return;
+  let csv=[headers,...currentData].map(r=>r.map(c=>c||'').join(",")).join("\n");
+  let blob=new Blob([csv],{type:"text/csv"}); let a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="SunshineTr.csv"; a.click();
+}
+
+// Auto-suggest Họ tên
+function suggest(){
+  let kw=hoTen.value; if(!kw){ suggestBox.innerHTML=""; return; }
+  google.script.run.withSuccessHandler(list=>{
+    suggestBox.innerHTML=''; list.forEach(n=>suggestBox.innerHTML+=`<div onclick="pick('${n}')">${n}</div>`);
+  }).suggestName(kw);
+}
+function pick(n){ hoTen.value=n; suggestBox.innerHTML=""; liveSearch(); }
+</script>
+</body>
+</html>
