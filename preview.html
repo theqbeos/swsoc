@@ -1,205 +1,166 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<title>Final Heatmap Interactive Dashboard</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Tra cứu Dữ liệu Pro</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root { --bg-body: #f4f7f6; --bg-card: #ffffff; --text-color: #333; }
+        [data-bs-theme="dark"] { --bg-body: #1a1d20; --bg-card: #2b3035; --text-color: #f8f9fa; }
+
+        body { background-color: var(--bg-body); color: var(--text-color); transition: all 0.3s; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .main-card { background: var(--bg-card); border-radius: 15px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 25px; }
+        .header-title { background: linear-gradient(90deg, #0d6efd, #0dcaf0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
+        
+        /* Tùy chỉnh bảng */
+        table.dataTable thead th { background-color: #0d6efd !important; color: white !important; border-bottom: none; }
+        .dataTables_wrapper .dataTables_filter input { border-radius: 20px; padding: 5px 15px; border: 1px solid #ddd; }
+        .dt-buttons .btn { border-radius: 20px; font-size: 13px; margin-right: 5px; }
+        
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
+        [data-bs-theme="dark"] #loading-overlay { background: rgba(0,0,0,0.8); }
+        
+        footer { margin-top: 30px; text-align: center; font-size: 0.9rem; opacity: 0.7; }
+    </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6 transition-colors duration-300">
+<body data-bs-theme="light">
 
-<div class="max-w-7xl mx-auto">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold">Final Heatmap Interactive Dashboard</h1>
-    <button id="toggleTheme" class="px-4 py-2 rounded bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600">Toggle Dark/Light</button>
-  </div>
-
-  <!-- Stats -->
-  <div id="dashboardStats" class="flex flex-wrap gap-4 mb-6">
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Tổng dòng: <span id="totalRows">0</span></div>
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Số sheet: <span id="totalSheets">0</span></div>
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Số cột: <span id="totalCols">0</span></div>
-  </div>
-
-  <!-- Charts -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
-      <h2 class="font-bold mb-2">Dữ liệu theo Sheet</h2>
-      <canvas id="chartSheet"></canvas>
-    </div>
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
-      <h2 class="font-bold mb-2">Dữ liệu theo Cột</h2>
-      <canvas id="chartColumn"></canvas>
-    </div>
-    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
-      <h2 class="font-bold mb-2">Trend theo Ngày</h2>
-      <canvas id="chartLine"></canvas>
-    </div>
-  </div>
-
-  <!-- Controls -->
-  <div class="flex flex-wrap gap-4 mb-6 items-center">
-    <input type="text" id="searchInput" placeholder="Tìm kiếm..." class="p-3 border rounded flex-1 shadow-sm focus:ring-2 focus:ring-blue-400">
-    <select id="columnFilter" class="p-3 border rounded shadow-sm"><option value="">Tất cả cột</option></select>
-    <input type="date" id="startDate" class="p-3 border rounded shadow-sm">
-    <input type="date" id="endDate" class="p-3 border rounded shadow-sm">
-    <button id="exportCSV" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 shadow">Export CSV</button>
-    <button id="exportXLSX" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 shadow">Export Excel</button>
-  </div>
-
-  <!-- Table -->
-  <div class="overflow-x-auto rounded shadow bg-white dark:bg-gray-800">
-    <table id="dataTable" class="min-w-full">
-      <thead>
-        <tr id="tableHeader" class="bg-gray-200 dark:bg-gray-700 sticky top-0"></tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-  </div>
-
-  <!-- Pagination -->
-  <div id="pagination" class="mt-4 flex gap-2 flex-wrap"></div>
-
+<div id="loading-overlay">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+    <p class="mt-3 fw-bold">Đang đồng bộ dữ liệu từ Google Sheets...</p>
 </div>
 
+<div class="container-fluid max-width-xl">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="header-title"><i class="fas fa-database me-2"></i>HỆ THỐNG TRA CỨU DATA</h2>
+        <button id="theme-toggle" class="btn btn-outline-secondary rounded-circle">
+            <i class="fas fa-moon"></i>
+        </button>
+    </div>
+
+    <div class="main-card">
+        <div id="toolbar" class="mb-3"></div>
+
+        <div class="table-responsive">
+            <table id="pro-table" class="table table-hover w-100" style="display:none;">
+                <thead>
+                    <tr id="table-header"></tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+                <tfoot>
+                    <tr id="table-footer"></tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <footer>
+        &copy; 2024 - Dữ liệu được cập nhật trực tiếp từ Google Sheets
+    </footer>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+
 <script>
-// CONFIG
-const sheets=[{name:"Sheet1",gid:0},{name:"Sheet2",gid:123456789},{name:"Sheet3",gid:987654321}];
-const sheetID="1q13Q_r7M_Q6p_nQ7ZVyR16YwdvXu-doPMVVX8H4riQk";
-let allData=[], headers=[], currentPage=1, rowsPerPage=50;
-let chartSheet=null, chartColumn=null, chartLine=null;
-let filterValue=null;
+    const SHEET_ID = '1khd3XaovH5B7fHg4f0JM7yIFWxNM7W97CAK3QkiSukk';
+    const SHEET_TITLE = 'Sheet1'; 
+    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_TITLE}`;
 
-// Theme
-document.getElementById("toggleTheme").addEventListener("click",()=>document.body.classList.toggle("dark"));
+    async function loadData() {
+        try {
+            const response = await fetch(CSV_URL);
+            const csvText = await response.text();
+            
+            // Hàm parse CSV chuyên sâu xử lý dấu phẩy trong ngoặc kép
+            const rows = parseCSV(csvText);
 
-// Fetch Sheet
-function fetchSheet(sheet){
-  const url=`https://docs.google.com/spreadsheets/d/${sheetID}/export?format=csv&id=${sheetID}&gid=${sheet.gid}`;
-  return fetch(url).then(res=>res.text()).then(csvText=>{
-    const rows=csvText.trim().split("\n").map(r=>r.split(","));
-    const sheetHeaders=rows[0];
-    const dataRows=rows.slice(1).map(r=>{
-      const obj={}; sheetHeaders.forEach((h,i)=>obj[h]=r[i]||""); obj._sheet=sheet.name; return obj;
+            if (rows.length > 0) {
+                const header = rows[0];
+                const body = rows.slice(1);
+
+                // Render Header & Footer (để lọc từng cột)
+                header.forEach(col => {
+                    $('#table-header').append(`<th>${col}</th>`);
+                    $('#table-footer').append(`<th><input type="text" class="form-control form-control-sm" placeholder="Lọc ${col}..." /></th>`);
+                });
+
+                // Render Body
+                body.forEach(rowData => {
+                    if (rowData.join('').trim() === "") return;
+                    let tr = '<tr>';
+                    rowData.forEach(cell => tr += `<td>${cell}</td>`);
+                    tr += '</tr>';
+                    $('#table-body').append(tr);
+                });
+
+                // Khởi tạo DataTables với tính năng nâng cao
+                const table = $('#pro-table').DataTable({
+                    dom: '<"d-flex justify-content-between"Bf>rt<"d-flex justify-content-between"ip>',
+                    buttons: [
+                        { extend: 'copy', className: 'btn-secondary' },
+                        { extend: 'excel', className: 'btn-success', title: 'Data_Export' },
+                        { extend: 'pdf', className: 'btn-danger', title: 'Data_Export' },
+                        { extend: 'print', className: 'btn-info' }
+                    ],
+                    language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/vi.json' },
+                    pageLength: 15,
+                    initComplete: function () {
+                        // Thiết lập tìm kiếm theo từng cột
+                        this.api().columns().every(function () {
+                            const that = this;
+                            $('input', this.footer()).on('keyup change clear', function () {
+                                if (that.search() !== this.value) {
+                                    that.search(this.value).draw();
+                                }
+                            });
+                        });
+                    }
+                });
+
+                $('#pro-table').show();
+                $('#loading-overlay').fadeOut();
+            }
+        } catch (err) {
+            alert("Lỗi tải dữ liệu. Hãy đảm bảo Sheet đã được Share 'Bất kỳ ai có link'.");
+            console.error(err);
+        }
+    }
+
+    function parseCSV(text) {
+        const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
+        return text.split('\n').map(row => row.split(regex).map(cell => cell.replace(/^"(.*)"$/, '$1').trim()));
+    }
+
+    // Toggle Dark Mode
+    $('#theme-toggle').click(function() {
+        const body = $('body');
+        if (body.attr('data-bs-theme') === 'dark') {
+            body.attr('data-bs-theme', 'light');
+            $(this).html('<i class="fas fa-moon"></i>');
+        } else {
+            body.attr('data-bs-theme', 'dark');
+            $(this).html('<i class="fas fa-sun"></i>');
+        }
     });
-    return {headers:sheetHeaders,dataRows};
-  });
-}
 
-// Load Data
-function loadData(){
-  Promise.all(sheets.map(fetchSheet)).then(results=>{
-    const tableHeader=document.getElementById("tableHeader");
-    const columnFilter=document.getElementById("columnFilter");
-    const headerSet=new Set(); results.forEach(r=>r.headers.forEach(h=>headerSet.add(h)));
-    headers=Array.from(headerSet); headers.push("_sheet");
-    tableHeader.innerHTML=""; columnFilter.innerHTML='<option value="">Tất cả cột</option>';
-    headers.forEach(h=>{
-      const th=document.createElement("th"); th.textContent=h;
-      th.className="px-4 py-2 border cursor-pointer text-gray-700 dark:text-gray-200 font-semibold";
-      th.addEventListener("click",()=>sortColumn(h)); tableHeader.appendChild(th);
-      const option=document.createElement("option"); option.value=h; option.textContent=h; columnFilter.appendChild(option);
-    });
-
-    allData=[]; results.forEach(r=>allData=allData.concat(r.dataRows));
-    document.getElementById("totalRows").textContent=allData.length;
-    document.getElementById("totalSheets").textContent=results.length;
-    document.getElementById("totalCols").textContent=headers.length;
-
-    renderTable(allData); renderPagination(allData); updateCharts();
-  });
-}
-
-// Render Table with Heatmap
-function renderTable(data){
-  const tableBody=document.getElementById("tableBody");
-  tableBody.innerHTML="";
-  const start=(currentPage-1)*rowsPerPage; const end=start+rowsPerPage;
-  const query=document.getElementById("searchInput").value.trim().toLowerCase();
-  const selectedCol=document.getElementById("columnFilter").value;
-  const startDate=document.getElementById("startDate").value; const endDate=document.getElementById("endDate").value;
-
-  // Count frequency for heatmap
-  const freq={}; data.forEach(row=>{headers.forEach(h=>{const val=row[h]||""; freq[h]=(freq[h]||{}); freq[h][val]=(freq[h][val]||0)+1;})});
-
-  data.slice(start,end).forEach(row=>{
-    const dateCol=headers.find(h=>h.toLowerCase().includes("date"));
-    if(dateCol){ const d=new Date(row[dateCol]); if(startDate && d<new Date(startDate)) return; if(endDate && d>new Date(endDate)) return; }
-    if(filterValue && row._sheet!==filterValue && row[filterValue?.col]!=filterValue?.val) return;
-
-    const tr=document.createElement("tr"); tr.className="hover:bg-gray-100 dark:hover:bg-gray-700";
-    headers.forEach(h=>{
-      let value=row[h]||"";
-      if(query && (!selectedCol || selectedCol===h)){
-        const regex=new RegExp(`(${query})`,"gi"); value=value.replace(regex,"<span class='bg-yellow-300 dark:bg-yellow-500 font-bold'>$1</span>");
-      }
-      const td=document.createElement("td"); td.innerHTML=value;
-      // Heatmap color
-      const count=freq[h][row[h]]; const maxCount=Math.max(...Object.values(freq[h]));
-      const intensity=count/maxCount*0.7; td.style.backgroundColor=`rgba(245,158,11,${intensity})`;
-      td.className+=" px-4 py-2 border text-gray-800 dark:text-gray-100"; tr.appendChild(td);
-    });
-    tableBody.appendChild(tr);
-  });
-}
-
-// Event Listeners
-["searchInput","columnFilter","startDate","endDate"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
-  currentPage=1; renderTable(allData); renderPagination(allData); updateCharts();
-}));
-
-// Sort
-let sortAsc=true;
-function sortColumn(col){
-  allData.sort((a,b)=>{
-    const valA=(a[col]||"").toLowerCase(); const valB=(b[col]||"").toLowerCase();
-    if(valA<valB) return sortAsc?-1:1; if(valA>valB) return sortAsc?1:-1; return 0;
-  }); sortAsc=!sortAsc; renderTable(allData); renderPagination(allData); updateCharts();
-}
-
-// Pagination
-function renderPagination(data){
-  const pagination=document.getElementById("pagination"); pagination.innerHTML="";
-  const totalPages=Math.ceil(data.length/rowsPerPage); if(totalPages<=1) return;
-  for(let i=1;i<=totalPages;i++){const btn=document.createElement("button"); btn.textContent=i;
-    btn.className=`px-3 py-1 rounded ${i===currentPage?"bg-blue-500 text-white":"bg-gray-200 dark:bg-gray-700"}`;
-    btn.addEventListener("click",()=>{currentPage=i; renderTable(allData); renderPagination(data);}); pagination.appendChild(btn);
-  }
-}
-
-// Export
-document.getElementById("exportCSV").addEventListener("click",()=>exportData("csv"));
-document.getElementById("exportXLSX").addEventListener("click",()=>exportData("xlsx"));
-function exportData(type){
-  let filtered=allData;
-  if(type==="csv"){ const csvContent=[headers.join(",")].concat(filtered.map(r=>headers.map(h=>`"${(r[h]||"").replace(/"/g,'""')}"`).join(","))).join("\n");
-    const blob=new Blob([csvContent],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="data_export.csv"; a.click(); URL.revokeObjectURL(url);
-  } else { const ws=XLSX.utils.json_to_sheet(filtered,{header:headers}); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1"); XLSX.writeFile(wb,"data_export.xlsx"); }
-}
-
-// Charts
-function updateCharts(){
-  const sheetCount={}, colCount={}, dateCount={};
-  allData.forEach(r=>{sheetCount[r._sheet]=(sheetCount[r._sheet]||0)+1; headers.forEach(h=>colCount[h]=(colCount[h]||0)+1); const dateCol=headers.find(h=>h.toLowerCase().includes("date")); if(dateCol && r[dateCol]){const d=r[dateCol]; dateCount[d]=(dateCount[d]||0)+1;} });
-
-  // Sheet Pie
-  const ctxSheet=document.getElementById("chartSheet").getContext("2d"); if(chartSheet) chartSheet.destroy();
-  chartSheet=new Chart(ctxSheet,{type:"pie",data:{labels:Object.keys(sheetCount),datasets:[{label:"Dòng theo Sheet",data:Object.values(sheetCount),backgroundColor:["#3B82F6","#F97316","#10B981","#F59E0B","#8B5CF6"]}]},options:{responsive:true,onClick:(evt,item)=>{if(item.length>0){const idx=item[0].index; filterValue={sheet:Object.keys(sheetCount)[idx]}; currentPage=1; renderTable(allData); renderPagination(allData);}}}});
-
-  // Column Bar
-  const ctxCol=document.getElementById("chartColumn").getContext("2d"); if(chartColumn) chartColumn.destroy();
-  chartColumn=new Chart(ctxCol,{type:"bar",data:{labels:Object.keys(colCount),datasets:[{label:"Số lượng theo Cột",data:Object.values(colCount),backgroundColor:"#3B82F6"}]},options:{responsive:true,onClick:(evt,item)=>{if(item.length>0){const idx=item[0].index; filterValue={col:Object.keys(colCount)[idx],val:""}; currentPage=1; renderTable(allData); renderPagination(allData);}}}});
-
-  // Line Chart
-  const ctxLine=document.getElementById("chartLine").getContext("2d"); if(chartLine) chartLine.destroy();
-  const sortedDates=Object.keys(dateCount).sort((a,b)=>new Date(a)-new Date(b)); const dataPoints=sortedDates.map(d=>dateCount[d]);
-  chartLine=new Chart(ctxLine,{type:"line",data:{labels:sortedDates,datasets:[{label:"Trend theo Ngày",data:dataPoints,fill:false,borderColor:"#F97316",tension:0.3}]},options:{responsive:true}});
-}
-
-// Auto Refresh
-setInterval(loadData,5*60*1000);
-loadData();
+    $(document).ready(loadData);
 </script>
+
 </body>
 </html>
