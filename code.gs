@@ -1,42 +1,43 @@
-function doGet() {
-  return HtmlService.createTemplateFromFile('index')
-      .evaluate()
-      .setTitle('Hệ Thống Tra Cứu Điều Phối Pro')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+const SOURCE_ID = '1rNFxGXT32vX2SyN_MDtYKlUJ-6lGY18YoXY1Lu8VFy4';
+const CACHE_KEY = "SUNSHINE_DATA";
+const CACHE_TTL = 600;
+
+function doGet() { return HtmlService.createHtmlOutputFromFile('SearchForm'); }
+
+function getAllData() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(CACHE_KEY);
+  if(cached) return JSON.parse(cached);
+
+  const ss = SpreadsheetApp.openById(SOURCE_ID);
+  const sheet = ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+
+  cache.put(CACHE_KEY, JSON.stringify(data), CACHE_TTL);
+  return data;
 }
 
-function getData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetConfigs = [
-    { name: "Ca 1", type: "Nhân Sự" },
-    { name: "Ca 2", type: "Nhân Sự" },
-    { name: "Ca 3", type: "Nhân Sự" },
-    { name: "LXX C3", type: "Xuất Tải" }
-  ];
-  
-  let allData = [];
-  
-  sheetConfigs.forEach(config => {
-    const sheet = ss.getSheetByName(config.name);
-    if (sheet) {
-      const data = sheet.getDataRange().getDisplayValues();
-      if (data.length < 2) return;
-      
-      const headers = data[0].map(h => h.toLowerCase().trim());
-      
-      for (let i = 1; i < data.length; i++) {
-        let obj = { 
-          _sheet: config.name, 
-          _type: config.type,
-          _rowId: config.name + i
-        };
-        headers.forEach((header, index) => {
-          if (header) obj[header] = data[i][index];
-        });
-        allData.push(obj);
-      }
-    }
+// Live search theo Họ tên
+function searchData(criteria) {
+  const data = getAllData();
+  const headers = data[0];
+  const colHoTen = headers.findIndex(h => h.toLowerCase().includes('tên'));
+  const keywords = (criteria.hoTen||'').toLowerCase().split(/\s+/).filter(Boolean);
+
+  const result = data.slice(1).filter(r=>{
+    if(!keywords.length) return true;
+    return keywords.every(k => (r[colHoTen]||'').toString().toLowerCase().includes(k));
   });
-  return allData;
+
+  return { headers, data: result, total: result.length, keywords };
+}
+
+// Auto-suggest Họ tên
+function suggestName(keyword) {
+  const data = getAllData();
+  const headers = data[0];
+  const colHoTen = headers.findIndex(h => h.toLowerCase().includes('tên'));
+  const list = new Set();
+  data.slice(1).forEach(r=>{ const ht=r[colHoTen]||''; if(ht.toLowerCase().includes(keyword.toLowerCase())) list.add(ht); });
+  return [...list].slice(0,10);
 }
