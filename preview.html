@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Website Google Sheets Deploy-Ready</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 p-6">
+
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md">
+  <h1 class="text-3xl font-bold mb-6 text-center">Dữ liệu Google Sheets Deploy-Ready</h1>
+
+  <!-- Tìm kiếm và lọc -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <input id="search" type="text" placeholder="Tìm kiếm chung..."
+      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <input id="filter-col1" type="text" placeholder="Lọc cột 1..."
+      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <input id="filter-col2" type="text" placeholder="Lọc cột 2..."
+      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+  </div>
+
+  <!-- Bảng dữ liệu -->
+  <div class="overflow-x-auto">
+    <table id="data-table" class="min-w-full border border-gray-200">
+      <thead class="bg-blue-100">
+        <tr id="table-head"></tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Phân trang -->
+  <div class="flex justify-between items-center mt-4 mb-4">
+    <button id="prev" class="px-4 py-2 bg-blue-400 text-white rounded disabled:opacity-50">Trước</button>
+    <span id="page-info" class="font-medium"></span>
+    <button id="next" class="px-4 py-2 bg-blue-400 text-white rounded disabled:opacity-50">Sau</button>
+  </div>
+
+  <!-- Export -->
+  <div class="mb-6">
+    <button id="exportExcel" class="px-4 py-2 bg-green-500 text-white rounded mr-2">Export Excel</button>
+    <button id="exportPDF" class="px-4 py-2 bg-red-500 text-white rounded">Export PDF</button>
+  </div>
+
+  <!-- Biểu đồ -->
+  <div class="mt-6">
+    <label for="chart-col" class="block font-medium mb-2">Chọn cột số liệu cho biểu đồ:</label>
+    <select id="chart-col" class="p-2 border border-gray-300 rounded mb-4">
+      <option value="2">Cột 3 mặc định</option>
+    </select>
+    <canvas id="chart" class="w-full h-64"></canvas>
+  </div>
+</div>
+
+<script>
+const sheetID = '1q13Q_r7M_Q6p_nQ7ZVyR16YwdvXu-doPMVVX8H4riQk';
+const sheetURL = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json`;
+const rowsPerPage = 10;
+let allRows = [];
+let cols = [];
+let currentPage = 1;
+let chartInstance = null;
+
+// --- Fetch dữ liệu ---
+fetch(sheetURL)
+  .then(res => res.text())
+  .then(data => {
+    const json = JSON.parse(data.substring(47, data.length - 2));
+    cols = json.table.cols;
+    allRows = json.table.rows;
+
+    // Tạo header
+    const headRow = document.getElementById('table-head');
+    cols.forEach(col => {
+      const th = document.createElement('th');
+      th.className = "p-2 border-b";
+      th.innerText = col.label;
+      headRow.appendChild(th);
+    });
+
+    // Tạo options chọn cột biểu đồ
+    const chartSelect = document.getElementById('chart-col');
+    chartSelect.innerHTML = '';
+    cols.forEach((c,i) => {
+      const option = document.createElement('option');
+      option.value = i;
+      option.text = c.label;
+      chartSelect.appendChild(option);
+    });
+
+    renderTable();
+    renderChart();
+  })
+  .catch(err => console.error(err));
+
+// --- Render bảng ---
+function renderTable() {
+  const tableBody = document.getElementById('table-body');
+  tableBody.innerHTML = '';
+
+  const search = document.getElementById('search').value.toLowerCase();
+  const filter1 = document.getElementById('filter-col1').value.toLowerCase();
+  const filter2 = document.getElementById('filter-col2').value.toLowerCase();
+
+  const filteredRows = allRows.filter(row => {
+    return row.c.some(cell => cell && cell.v.toString().toLowerCase().includes(search)) &&
+           (!filter1 || (row.c[0] && row.c[0].v.toString().toLowerCase().includes(filter1))) &&
+           (!filter2 || (row.c[1] && row.c[1].v.toString().toLowerCase().includes(filter2)));
+  });
+
+  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
+  if(currentPage > totalPages) currentPage = totalPages || 1;
+
+  const start = (currentPage - 1) * rowsPerPage;
+  const pageRows = filteredRows.slice(start, start + rowsPerPage);
+
+  pageRows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-gray-100";
+    row.c.forEach(cell => {
+      const td = document.createElement('td');
+      td.className = "p-2 border-b";
+      td.innerText = cell ? cell.v : '';
+      tr.appendChild(td);
+    });
+    tableBody.appendChild(tr);
+  });
+
+  document.getElementById('page-info').innerText = `Trang ${currentPage} / ${totalPages || 1}`;
+  document.getElementById('prev').disabled = currentPage === 1;
+  document.getElementById('next').disabled = currentPage === totalPages || totalPages === 0;
+}
+
+// --- Tìm kiếm & lọc ---
+['search','filter-col1','filter-col2'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { currentPage = 1; renderTable(); renderChart(); });
+});
+
+// --- Phân trang ---
+document.getElementById('prev').addEventListener('click', () => { currentPage--; renderTable(); renderChart(); });
+document.getElementById('next').addEventListener('click', () => { currentPage++; renderTable(); renderChart(); });
+
+// --- Export Excel ---
+document.getElementById('exportExcel').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+  const wsData = allRows.map(r => r.c.map(c => c ? c.v : ''));
+  wsData.unshift(cols.map(c => c.label));
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  XLSX.writeFile(wb, "data.xlsx");
+});
+
+// --- Export PDF ---
+document.getElementById('exportPDF').addEventListener('click', async () => {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(12);
+  let y = 10;
+  doc.text("Dữ liệu Google Sheets", 10, y);
+  y += 10;
+
+  // Header
+  const header = cols.map(c => c.label);
+  doc.text(header.join(" | "), 10, y);
+  y += 10;
+
+  // Rows
+  allRows.forEach(r => {
+    const line = r.c.map(c => c ? c.v : '').join(" | ");
+    doc.text(line, 10, y);
+    y += 7;
+  });
+
+  doc.save("data.pdf");
+});
+
+// --- Render Chart ---
+document.getElementById('chart-col').addEventListener('change', renderChart);
+
+function renderChart() {
+  const chartCol = parseInt(document.getElementById('chart-col').value || 2);
+
+  const search = document.getElementById('search').value.toLowerCase();
+  const filter1 = document.getElementById('filter-col1').value.toLowerCase();
+  const filter2 = document.getElementById('filter-col2').value.toLowerCase();
+
+  const filteredRows = allRows.filter(row => {
+    return row.c.some(cell => cell && cell.v.toString().toLowerCase().includes(search)) &&
+           (!filter1 || (row.c[0] && row.c[0].v.toString().toLowerCase().includes(filter1))) &&
+           (!filter2 || (row.c[1] && row.c[1].v.toString().toLowerCase().includes(filter2)));
+  });
+
+  const labels = filteredRows.map((r,i) => `#${i+1}`);
+  const dataValues = filteredRows.map(r => (r.c[chartCol] ? parseFloat(r.c[chartCol].v) : 0));
+
+  const ctx = document.getElementById('chart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: cols[chartCol]?.label || 'Giá trị', data: dataValues, backgroundColor: 'rgba(59, 130, 246, 0.7)' }] },
+    options: { responsive:true, plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}} }
+  });
+}
+</script>
+
+</body>
+</html>
