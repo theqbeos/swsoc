@@ -1,166 +1,316 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ thống Tra cứu Dữ liệu Pro</title>
-    
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap5.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+    <title>Tra cứu Thông tin - Google Sheets (Dark Mode)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        :root { --bg-body: #f4f7f6; --bg-card: #ffffff; --text-color: #333; }
-        [data-bs-theme="dark"] { --bg-body: #1a1d20; --bg-card: #2b3035; --text-color: #f8f9fa; }
+        body {
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .navbar-brand { font-weight: bold; font-size: 1.4rem; }
+        .search-box { max-width: 700px; margin: 20px auto; }
+        .table th { cursor: pointer; user-select: none; position: relative; }
+        .table th:hover { background-color: #0b5ed7 !important; }
+        .table th.sorted-asc::after { content: " ↑"; }
+        .table th.sorted-desc::after { content: " ↓"; }
+        .no-data { text-align: center; padding: 50px; }
+        .pagination-info { font-size: 0.95rem; }
 
-        body { background-color: var(--bg-body); color: var(--text-color); transition: all 0.3s; padding: 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .main-card { background: var(--bg-card); border-radius: 15px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 25px; }
-        .header-title { background: linear-gradient(90deg, #0d6efd, #0dcaf0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
-        
-        /* Tùy chỉnh bảng */
-        table.dataTable thead th { background-color: #0d6efd !important; color: white !important; border-bottom: none; }
-        .dataTables_wrapper .dataTables_filter input { border-radius: 20px; padding: 5px 15px; border: 1px solid #ddd; }
-        .dt-buttons .btn { border-radius: 20px; font-size: 13px; margin-right: 5px; }
-        
-        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; }
-        [data-bs-theme="dark"] #loading-overlay { background: rgba(0,0,0,0.8); }
-        
-        footer { margin-top: 30px; text-align: center; font-size: 0.9rem; opacity: 0.7; }
+        /* Dark mode tùy chỉnh thêm (đẹp hơn Bootstrap mặc định) */
+        [data-bs-theme="dark"] body {
+            background-color: #121212;
+        }
+        [data-bs-theme="dark"] .table {
+            background-color: #1e1e1e;
+            color: #e0e0e0;
+        }
+        [data-bs-theme="dark"] .table thead {
+            background-color: #0d47a1;
+        }
+        [data-bs-theme="dark"] .alert-info {
+            background-color: #1a3c5e;
+            color: #a8d4ff;
+            border-color: #1a3c5e;
+        }
+        [data-bs-theme="dark"] .footer {
+            background-color: #1e1e1e;
+            color: #aaa;
+        }
+        .theme-toggle {
+            font-size: 1.3rem;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
     </style>
 </head>
 <body data-bs-theme="light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">📊 Tra cứu Thông tin (Dark Mode)</a>
+            
+            <!-- Nút chuyển chế độ -->
+            <button id="themeToggle" class="theme-toggle btn btn-outline-light ms-auto">
+                🌙
+            </button>
+        </div>
+    </nav>
 
-<div id="loading-overlay">
-    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-    <p class="mt-3 fw-bold">Đang đồng bộ dữ liệu từ Google Sheets...</p>
-</div>
+    <div class="container mt-4">
+        <div class="alert alert-info">
+            <strong>Hướng dẫn:</strong> Sheet phải được đặt “Anyone with the link can view”.<br>
+            Gõ từ khóa để tìm • Click tiêu đề cột để sắp xếp • Nhấn Xuất CSV • Bấm icon mặt trời/trăng để chuyển Dark/Light mode.
+        </div>
 
-<div class="container-fluid max-width-xl">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="header-title"><i class="fas fa-database me-2"></i>HỆ THỐNG TRA CỨU DATA</h2>
-        <button id="theme-toggle" class="btn btn-outline-secondary rounded-circle">
-            <i class="fas fa-moon"></i>
-        </button>
-    </div>
+        <!-- Thanh công cụ -->
+        <div class="row mb-3">
+            <div class="col-md-8 search-box">
+                <div class="input-group input-group-lg">
+                    <span class="input-group-text">🔎</span>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Tìm kiếm theo bất kỳ cột nào...">
+                </div>
+            </div>
+            <div class="col-md-4 text-end">
+                <button id="exportBtn" class="btn btn-success btn-lg">
+                    📥 Xuất CSV
+                </button>
+            </div>
+        </div>
 
-    <div class="main-card">
-        <div id="toolbar" class="mb-3"></div>
+        <div id="loading" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3">Đang tải dữ liệu từ Google Sheets...</p>
+        </div>
 
+        <div id="error" class="alert alert-danger d-none text-center">
+            ❌ Không tải được dữ liệu.<br>
+            Vui lòng kiểm tra Sheet đã chia sẻ công khai chưa?
+        </div>
+
+        <!-- Thống kê -->
+        <div id="stats" class="pagination-info mb-2 text-end d-none">
+            Tổng: <strong id="totalRows">0</strong> dòng | Trang <strong id="currentPage">1</strong>/<strong id="totalPages">1</strong>
+        </div>
+
+        <!-- Bảng -->
         <div class="table-responsive">
-            <table id="pro-table" class="table table-hover w-100" style="display:none;">
-                <thead>
-                    <tr id="table-header"></tr>
-                </thead>
-                <tbody id="table-body"></tbody>
-                <tfoot>
-                    <tr id="table-footer"></tr>
-                </tfoot>
+            <table id="dataTable" class="table table-striped table-hover">
+                <thead><tr id="tableHeader"></tr></thead>
+                <tbody id="tableBody"></tbody>
             </table>
+        </div>
+
+        <!-- Phân trang -->
+        <div id="pagination" class="d-flex justify-content-between align-items-center mt-3 d-none">
+            <button id="prevBtn" class="btn btn-outline-primary">← Trang trước</button>
+            <div class="btn-group" id="pageNumbers"></div>
+            <button id="nextBtn" class="btn btn-outline-primary">Trang sau →</button>
+        </div>
+
+        <div id="noResults" class="no-data d-none">
+            <h4>Không tìm thấy kết quả nào</h4>
+            <p>Thử từ khóa khác hoặc bỏ trống ô tìm kiếm.</p>
         </div>
     </div>
 
-    <footer>
-        &copy; 2024 - Dữ liệu được cập nhật trực tiếp từ Google Sheets
+    <footer class="footer py-4 text-center mt-5">
+        <small>HTML đơn giản • Tìm kiếm realtime • Sắp xếp • Xuất CSV • Phân trang • Dark Mode • Dữ liệu lấy trực tiếp từ link của bạn</small>
     </footer>
-</div>
 
-<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.bootstrap5.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.print.min.js"></script>
+    <script>
+        const SHEET_ID = "1khd3XaovH5B7fHg4f0JM7yIFWxNM7W97CAK3QkiSukk";
+        const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
 
-<script>
-    const SHEET_ID = '1khd3XaovH5B7fHg4f0JM7yIFWxNM7W97CAK3QkiSukk';
-    const SHEET_TITLE = 'Sheet1'; 
-    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${SHEET_TITLE}`;
+        let allData = [], headers = [], filteredData = [];
+        let currentPage = 1, rowsPerPage = 15;
+        let sortColumn = null, sortDirection = 'asc';
 
-    async function loadData() {
-        try {
-            const response = await fetch(CSV_URL);
-            const csvText = await response.text();
+        // ================== DARK MODE ==================
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', savedTheme);
+            document.getElementById('themeToggle').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-bs-theme');
+            const newTheme = current === 'light' ? 'dark' : 'light';
             
-            // Hàm parse CSV chuyên sâu xử lý dấu phẩy trong ngoặc kép
-            const rows = parseCSV(csvText);
+            document.documentElement.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            document.getElementById('themeToggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        });
 
-            if (rows.length > 0) {
-                const header = rows[0];
-                const body = rows.slice(1);
+        // ================== TẢI DỮ LIỆU ==================
+        async function loadData() {
+            const loading = document.getElementById("loading");
+            const error = document.getElementById("error");
 
-                // Render Header & Footer (để lọc từng cột)
-                header.forEach(col => {
-                    $('#table-header').append(`<th>${col}</th>`);
-                    $('#table-footer').append(`<th><input type="text" class="form-control form-control-sm" placeholder="Lọc ${col}..." /></th>`);
-                });
+            try {
+                const res = await fetch(CSV_URL);
+                if (!res.ok) throw new Error();
+                const csv = await res.text();
 
-                // Render Body
-                body.forEach(rowData => {
-                    if (rowData.join('').trim() === "") return;
-                    let tr = '<tr>';
-                    rowData.forEach(cell => tr += `<td>${cell}</td>`);
-                    tr += '</tr>';
-                    $('#table-body').append(tr);
-                });
-
-                // Khởi tạo DataTables với tính năng nâng cao
-                const table = $('#pro-table').DataTable({
-                    dom: '<"d-flex justify-content-between"Bf>rt<"d-flex justify-content-between"ip>',
-                    buttons: [
-                        { extend: 'copy', className: 'btn-secondary' },
-                        { extend: 'excel', className: 'btn-success', title: 'Data_Export' },
-                        { extend: 'pdf', className: 'btn-danger', title: 'Data_Export' },
-                        { extend: 'print', className: 'btn-info' }
-                    ],
-                    language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/vi.json' },
-                    pageLength: 15,
-                    initComplete: function () {
-                        // Thiết lập tìm kiếm theo từng cột
-                        this.api().columns().every(function () {
-                            const that = this;
-                            $('input', this.footer()).on('keyup change clear', function () {
-                                if (that.search() !== this.value) {
-                                    that.search(this.value).draw();
-                                }
-                            });
-                        });
+                Papa.parse(csv, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        headers = results.meta.fields;
+                        allData = results.data.filter(row => Object.values(row).some(v => v));
+                        filteredData = [...allData];
+                        loading.classList.add("d-none");
+                        renderHeader();
+                        renderTable();
                     }
                 });
-
-                $('#pro-table').show();
-                $('#loading-overlay').fadeOut();
+            } catch (e) {
+                loading.classList.add("d-none");
+                error.classList.remove("d-none");
             }
-        } catch (err) {
-            alert("Lỗi tải dữ liệu. Hãy đảm bảo Sheet đã được Share 'Bất kỳ ai có link'.");
-            console.error(err);
         }
-    }
 
-    function parseCSV(text) {
-        const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/;
-        return text.split('\n').map(row => row.split(regex).map(cell => cell.replace(/^"(.*)"$/, '$1').trim()));
-    }
-
-    // Toggle Dark Mode
-    $('#theme-toggle').click(function() {
-        const body = $('body');
-        if (body.attr('data-bs-theme') === 'dark') {
-            body.attr('data-bs-theme', 'light');
-            $(this).html('<i class="fas fa-moon"></i>');
-        } else {
-            body.attr('data-bs-theme', 'dark');
-            $(this).html('<i class="fas fa-sun"></i>');
+        function renderHeader() {
+            const headerRow = document.getElementById("tableHeader");
+            headerRow.innerHTML = "";
+            headers.forEach((col) => {
+                const th = document.createElement("th");
+                th.textContent = col;
+                th.dataset.col = col;
+                th.addEventListener("click", () => sortTable(col));
+                headerRow.appendChild(th);
+            });
         }
-    });
 
-    $(document).ready(loadData);
-</script>
+        function sortTable(col) {
+            if (sortColumn === col) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = col;
+                sortDirection = 'asc';
+            }
 
+            document.querySelectorAll("th").forEach(th => {
+                th.classList.remove("sorted-asc", "sorted-desc");
+                if (th.dataset.col === col) {
+                    th.classList.add(sortDirection === 'asc' ? "sorted-asc" : "sorted-desc");
+                }
+            });
+
+            filteredData.sort((a, b) => {
+                let valA = a[col] || "";
+                let valB = b[col] || "";
+                if (!isNaN(valA) && !isNaN(valB)) return sortDirection === 'asc' ? valA - valB : valB - valA;
+                return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            });
+
+            currentPage = 1;
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById("tableBody");
+            tbody.innerHTML = "";
+
+            const start = (currentPage - 1) * rowsPerPage;
+            const end = start + rowsPerPage;
+            const pageData = filteredData.slice(start, end);
+
+            if (pageData.length === 0) {
+                document.getElementById("noResults").classList.remove("d-none");
+                document.getElementById("stats").classList.add("d-none");
+                document.getElementById("pagination").classList.add("d-none");
+                return;
+            }
+            document.getElementById("noResults").classList.add("d-none");
+            document.getElementById("stats").classList.remove("d-none");
+            document.getElementById("pagination").classList.remove("d-none");
+
+            document.getElementById("totalRows").textContent = filteredData.length;
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            document.getElementById("currentPage").textContent = currentPage;
+            document.getElementById("totalPages").textContent = totalPages;
+
+            pageData.forEach(row => {
+                const tr = document.createElement("tr");
+                headers.forEach(col => {
+                    const td = document.createElement("td");
+                    td.textContent = row[col] || "";
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            const container = document.getElementById("pageNumbers");
+            container.innerHTML = "";
+
+            for (let i = 1; i <= totalPages; i++) {
+                const btn = document.createElement("button");
+                btn.className = `btn btn-sm ${i === currentPage ? 'btn-primary' : 'btn-outline-primary'}`;
+                btn.textContent = i;
+                btn.addEventListener("click", () => { currentPage = i; renderTable(); });
+                container.appendChild(btn);
+            }
+
+            document.getElementById("prevBtn").disabled = currentPage === 1;
+            document.getElementById("nextBtn").disabled = currentPage === totalPages;
+        }
+
+        // Sự kiện phân trang
+        document.getElementById("prevBtn").addEventListener("click", () => { if (currentPage > 1) { currentPage--; renderTable(); }});
+        document.getElementById("nextBtn").addEventListener("click", () => { 
+            if (currentPage < Math.ceil(filteredData.length / rowsPerPage)) { currentPage++; renderTable(); }
+        });
+
+        // Tìm kiếm
+        document.getElementById("searchInput").addEventListener("keyup", (e) => {
+            const term = e.target.value.toLowerCase().trim();
+            filteredData = allData.filter(row => 
+                Object.values(row).some(val => String(val).toLowerCase().includes(term))
+            );
+            currentPage = 1;
+            sortColumn = null;
+            document.querySelectorAll("th").forEach(th => th.classList.remove("sorted-asc", "sorted-desc"));
+            renderTable();
+        });
+
+        // Xuất CSV
+        document.getElementById("exportBtn").addEventListener("click", () => {
+            if (filteredData.length === 0) return alert("Không có dữ liệu để xuất!");
+            
+            let csvContent = headers.join(",") + "\n";
+            filteredData.forEach(row => {
+                const line = headers.map(col => {
+                    let val = (row[col] || "").toString();
+                    if (val.includes(",") || val.includes('"')) val = '"' + val.replace(/"/g, '""') + '"';
+                    return val;
+                }).join(",");
+                csvContent += line + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "du_lieu_tra_cuu.csv";
+            link.click();
+        });
+
+        // ================== KHỞI ĐỘNG ==================
+        window.onload = () => {
+            initTheme();   // Khởi tạo dark mode từ lần trước
+            loadData();
+        };
+    </script>
 </body>
 </html>
