@@ -2,212 +2,204 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Website Google Sheets Deploy-Ready</title>
+<title>Final Heatmap Interactive Dashboard</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
-<body class="bg-gray-50 p-6">
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6 transition-colors duration-300">
 
-<div class="max-w-7xl mx-auto bg-white p-6 rounded-lg shadow-md">
-  <h1 class="text-3xl font-bold mb-6 text-center">Dữ liệu Google Sheets Deploy-Ready</h1>
-
-  <!-- Tìm kiếm và lọc -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-    <input id="search" type="text" placeholder="Tìm kiếm chung..."
-      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-    <input id="filter-col1" type="text" placeholder="Lọc cột 1..."
-      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
-    <input id="filter-col2" type="text" placeholder="Lọc cột 2..."
-      class="p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400">
+<div class="max-w-7xl mx-auto">
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold">Final Heatmap Interactive Dashboard</h1>
+    <button id="toggleTheme" class="px-4 py-2 rounded bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600">Toggle Dark/Light</button>
   </div>
 
-  <!-- Bảng dữ liệu -->
-  <div class="overflow-x-auto">
-    <table id="data-table" class="min-w-full border border-gray-200">
-      <thead class="bg-blue-100">
-        <tr id="table-head"></tr>
+  <!-- Stats -->
+  <div id="dashboardStats" class="flex flex-wrap gap-4 mb-6">
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Tổng dòng: <span id="totalRows">0</span></div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Số sheet: <span id="totalSheets">0</span></div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4 flex-1">Số cột: <span id="totalCols">0</span></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
+      <h2 class="font-bold mb-2">Dữ liệu theo Sheet</h2>
+      <canvas id="chartSheet"></canvas>
+    </div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
+      <h2 class="font-bold mb-2">Dữ liệu theo Cột</h2>
+      <canvas id="chartColumn"></canvas>
+    </div>
+    <div class="bg-white dark:bg-gray-800 shadow rounded p-4">
+      <h2 class="font-bold mb-2">Trend theo Ngày</h2>
+      <canvas id="chartLine"></canvas>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="flex flex-wrap gap-4 mb-6 items-center">
+    <input type="text" id="searchInput" placeholder="Tìm kiếm..." class="p-3 border rounded flex-1 shadow-sm focus:ring-2 focus:ring-blue-400">
+    <select id="columnFilter" class="p-3 border rounded shadow-sm"><option value="">Tất cả cột</option></select>
+    <input type="date" id="startDate" class="p-3 border rounded shadow-sm">
+    <input type="date" id="endDate" class="p-3 border rounded shadow-sm">
+    <button id="exportCSV" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 shadow">Export CSV</button>
+    <button id="exportXLSX" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 shadow">Export Excel</button>
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded shadow bg-white dark:bg-gray-800">
+    <table id="dataTable" class="min-w-full">
+      <thead>
+        <tr id="tableHeader" class="bg-gray-200 dark:bg-gray-700 sticky top-0"></tr>
       </thead>
-      <tbody id="table-body"></tbody>
+      <tbody id="tableBody"></tbody>
     </table>
   </div>
 
-  <!-- Phân trang -->
-  <div class="flex justify-between items-center mt-4 mb-4">
-    <button id="prev" class="px-4 py-2 bg-blue-400 text-white rounded disabled:opacity-50">Trước</button>
-    <span id="page-info" class="font-medium"></span>
-    <button id="next" class="px-4 py-2 bg-blue-400 text-white rounded disabled:opacity-50">Sau</button>
-  </div>
+  <!-- Pagination -->
+  <div id="pagination" class="mt-4 flex gap-2 flex-wrap"></div>
 
-  <!-- Export -->
-  <div class="mb-6">
-    <button id="exportExcel" class="px-4 py-2 bg-green-500 text-white rounded mr-2">Export Excel</button>
-    <button id="exportPDF" class="px-4 py-2 bg-red-500 text-white rounded">Export PDF</button>
-  </div>
-
-  <!-- Biểu đồ -->
-  <div class="mt-6">
-    <label for="chart-col" class="block font-medium mb-2">Chọn cột số liệu cho biểu đồ:</label>
-    <select id="chart-col" class="p-2 border border-gray-300 rounded mb-4">
-      <option value="2">Cột 3 mặc định</option>
-    </select>
-    <canvas id="chart" class="w-full h-64"></canvas>
-  </div>
 </div>
 
 <script>
-const sheetID = '1q13Q_r7M_Q6p_nQ7ZVyR16YwdvXu-doPMVVX8H4riQk';
-const sheetURL = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json`;
-const rowsPerPage = 10;
-let allRows = [];
-let cols = [];
-let currentPage = 1;
-let chartInstance = null;
+// CONFIG
+const sheets=[{name:"Sheet1",gid:0},{name:"Sheet2",gid:123456789},{name:"Sheet3",gid:987654321}];
+const sheetID="1q13Q_r7M_Q6p_nQ7ZVyR16YwdvXu-doPMVVX8H4riQk";
+let allData=[], headers=[], currentPage=1, rowsPerPage=50;
+let chartSheet=null, chartColumn=null, chartLine=null;
+let filterValue=null;
 
-// --- Fetch dữ liệu ---
-fetch(sheetURL)
-  .then(res => res.text())
-  .then(data => {
-    const json = JSON.parse(data.substring(47, data.length - 2));
-    cols = json.table.cols;
-    allRows = json.table.rows;
+// Theme
+document.getElementById("toggleTheme").addEventListener("click",()=>document.body.classList.toggle("dark"));
 
-    // Tạo header
-    const headRow = document.getElementById('table-head');
-    cols.forEach(col => {
-      const th = document.createElement('th');
-      th.className = "p-2 border-b";
-      th.innerText = col.label;
-      headRow.appendChild(th);
+// Fetch Sheet
+function fetchSheet(sheet){
+  const url=`https://docs.google.com/spreadsheets/d/${sheetID}/export?format=csv&id=${sheetID}&gid=${sheet.gid}`;
+  return fetch(url).then(res=>res.text()).then(csvText=>{
+    const rows=csvText.trim().split("\n").map(r=>r.split(","));
+    const sheetHeaders=rows[0];
+    const dataRows=rows.slice(1).map(r=>{
+      const obj={}; sheetHeaders.forEach((h,i)=>obj[h]=r[i]||""); obj._sheet=sheet.name; return obj;
     });
-
-    // Tạo options chọn cột biểu đồ
-    const chartSelect = document.getElementById('chart-col');
-    chartSelect.innerHTML = '';
-    cols.forEach((c,i) => {
-      const option = document.createElement('option');
-      option.value = i;
-      option.text = c.label;
-      chartSelect.appendChild(option);
-    });
-
-    renderTable();
-    renderChart();
-  })
-  .catch(err => console.error(err));
-
-// --- Render bảng ---
-function renderTable() {
-  const tableBody = document.getElementById('table-body');
-  tableBody.innerHTML = '';
-
-  const search = document.getElementById('search').value.toLowerCase();
-  const filter1 = document.getElementById('filter-col1').value.toLowerCase();
-  const filter2 = document.getElementById('filter-col2').value.toLowerCase();
-
-  const filteredRows = allRows.filter(row => {
-    return row.c.some(cell => cell && cell.v.toString().toLowerCase().includes(search)) &&
-           (!filter1 || (row.c[0] && row.c[0].v.toString().toLowerCase().includes(filter1))) &&
-           (!filter2 || (row.c[1] && row.c[1].v.toString().toLowerCase().includes(filter2)));
+    return {headers:sheetHeaders,dataRows};
   });
+}
 
-  const totalPages = Math.ceil(filteredRows.length / rowsPerPage);
-  if(currentPage > totalPages) currentPage = totalPages || 1;
+// Load Data
+function loadData(){
+  Promise.all(sheets.map(fetchSheet)).then(results=>{
+    const tableHeader=document.getElementById("tableHeader");
+    const columnFilter=document.getElementById("columnFilter");
+    const headerSet=new Set(); results.forEach(r=>r.headers.forEach(h=>headerSet.add(h)));
+    headers=Array.from(headerSet); headers.push("_sheet");
+    tableHeader.innerHTML=""; columnFilter.innerHTML='<option value="">Tất cả cột</option>';
+    headers.forEach(h=>{
+      const th=document.createElement("th"); th.textContent=h;
+      th.className="px-4 py-2 border cursor-pointer text-gray-700 dark:text-gray-200 font-semibold";
+      th.addEventListener("click",()=>sortColumn(h)); tableHeader.appendChild(th);
+      const option=document.createElement("option"); option.value=h; option.textContent=h; columnFilter.appendChild(option);
+    });
 
-  const start = (currentPage - 1) * rowsPerPage;
-  const pageRows = filteredRows.slice(start, start + rowsPerPage);
+    allData=[]; results.forEach(r=>allData=allData.concat(r.dataRows));
+    document.getElementById("totalRows").textContent=allData.length;
+    document.getElementById("totalSheets").textContent=results.length;
+    document.getElementById("totalCols").textContent=headers.length;
 
-  pageRows.forEach(row => {
-    const tr = document.createElement('tr');
-    tr.className = "hover:bg-gray-100";
-    row.c.forEach(cell => {
-      const td = document.createElement('td');
-      td.className = "p-2 border-b";
-      td.innerText = cell ? cell.v : '';
-      tr.appendChild(td);
+    renderTable(allData); renderPagination(allData); updateCharts();
+  });
+}
+
+// Render Table with Heatmap
+function renderTable(data){
+  const tableBody=document.getElementById("tableBody");
+  tableBody.innerHTML="";
+  const start=(currentPage-1)*rowsPerPage; const end=start+rowsPerPage;
+  const query=document.getElementById("searchInput").value.trim().toLowerCase();
+  const selectedCol=document.getElementById("columnFilter").value;
+  const startDate=document.getElementById("startDate").value; const endDate=document.getElementById("endDate").value;
+
+  // Count frequency for heatmap
+  const freq={}; data.forEach(row=>{headers.forEach(h=>{const val=row[h]||""; freq[h]=(freq[h]||{}); freq[h][val]=(freq[h][val]||0)+1;})});
+
+  data.slice(start,end).forEach(row=>{
+    const dateCol=headers.find(h=>h.toLowerCase().includes("date"));
+    if(dateCol){ const d=new Date(row[dateCol]); if(startDate && d<new Date(startDate)) return; if(endDate && d>new Date(endDate)) return; }
+    if(filterValue && row._sheet!==filterValue && row[filterValue?.col]!=filterValue?.val) return;
+
+    const tr=document.createElement("tr"); tr.className="hover:bg-gray-100 dark:hover:bg-gray-700";
+    headers.forEach(h=>{
+      let value=row[h]||"";
+      if(query && (!selectedCol || selectedCol===h)){
+        const regex=new RegExp(`(${query})`,"gi"); value=value.replace(regex,"<span class='bg-yellow-300 dark:bg-yellow-500 font-bold'>$1</span>");
+      }
+      const td=document.createElement("td"); td.innerHTML=value;
+      // Heatmap color
+      const count=freq[h][row[h]]; const maxCount=Math.max(...Object.values(freq[h]));
+      const intensity=count/maxCount*0.7; td.style.backgroundColor=`rgba(245,158,11,${intensity})`;
+      td.className+=" px-4 py-2 border text-gray-800 dark:text-gray-100"; tr.appendChild(td);
     });
     tableBody.appendChild(tr);
   });
-
-  document.getElementById('page-info').innerText = `Trang ${currentPage} / ${totalPages || 1}`;
-  document.getElementById('prev').disabled = currentPage === 1;
-  document.getElementById('next').disabled = currentPage === totalPages || totalPages === 0;
 }
 
-// --- Tìm kiếm & lọc ---
-['search','filter-col1','filter-col2'].forEach(id => {
-  document.getElementById(id).addEventListener('input', () => { currentPage = 1; renderTable(); renderChart(); });
-});
+// Event Listeners
+["searchInput","columnFilter","startDate","endDate"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
+  currentPage=1; renderTable(allData); renderPagination(allData); updateCharts();
+}));
 
-// --- Phân trang ---
-document.getElementById('prev').addEventListener('click', () => { currentPage--; renderTable(); renderChart(); });
-document.getElementById('next').addEventListener('click', () => { currentPage++; renderTable(); renderChart(); });
-
-// --- Export Excel ---
-document.getElementById('exportExcel').addEventListener('click', () => {
-  const wb = XLSX.utils.book_new();
-  const wsData = allRows.map(r => r.c.map(c => c ? c.v : ''));
-  wsData.unshift(cols.map(c => c.label));
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  XLSX.writeFile(wb, "data.xlsx");
-});
-
-// --- Export PDF ---
-document.getElementById('exportPDF').addEventListener('click', async () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.setFontSize(12);
-  let y = 10;
-  doc.text("Dữ liệu Google Sheets", 10, y);
-  y += 10;
-
-  // Header
-  const header = cols.map(c => c.label);
-  doc.text(header.join(" | "), 10, y);
-  y += 10;
-
-  // Rows
-  allRows.forEach(r => {
-    const line = r.c.map(c => c ? c.v : '').join(" | ");
-    doc.text(line, 10, y);
-    y += 7;
-  });
-
-  doc.save("data.pdf");
-});
-
-// --- Render Chart ---
-document.getElementById('chart-col').addEventListener('change', renderChart);
-
-function renderChart() {
-  const chartCol = parseInt(document.getElementById('chart-col').value || 2);
-
-  const search = document.getElementById('search').value.toLowerCase();
-  const filter1 = document.getElementById('filter-col1').value.toLowerCase();
-  const filter2 = document.getElementById('filter-col2').value.toLowerCase();
-
-  const filteredRows = allRows.filter(row => {
-    return row.c.some(cell => cell && cell.v.toString().toLowerCase().includes(search)) &&
-           (!filter1 || (row.c[0] && row.c[0].v.toString().toLowerCase().includes(filter1))) &&
-           (!filter2 || (row.c[1] && row.c[1].v.toString().toLowerCase().includes(filter2)));
-  });
-
-  const labels = filteredRows.map((r,i) => `#${i+1}`);
-  const dataValues = filteredRows.map(r => (r.c[chartCol] ? parseFloat(r.c[chartCol].v) : 0));
-
-  const ctx = document.getElementById('chart').getContext('2d');
-  if(chartInstance) chartInstance.destroy();
-
-  chartInstance = new Chart(ctx, {
-    type: 'bar',
-    data: { labels, datasets: [{ label: cols[chartCol]?.label || 'Giá trị', data: dataValues, backgroundColor: 'rgba(59, 130, 246, 0.7)' }] },
-    options: { responsive:true, plugins:{legend:{display:true}}, scales:{y:{beginAtZero:true}} }
-  });
+// Sort
+let sortAsc=true;
+function sortColumn(col){
+  allData.sort((a,b)=>{
+    const valA=(a[col]||"").toLowerCase(); const valB=(b[col]||"").toLowerCase();
+    if(valA<valB) return sortAsc?-1:1; if(valA>valB) return sortAsc?1:-1; return 0;
+  }); sortAsc=!sortAsc; renderTable(allData); renderPagination(allData); updateCharts();
 }
+
+// Pagination
+function renderPagination(data){
+  const pagination=document.getElementById("pagination"); pagination.innerHTML="";
+  const totalPages=Math.ceil(data.length/rowsPerPage); if(totalPages<=1) return;
+  for(let i=1;i<=totalPages;i++){const btn=document.createElement("button"); btn.textContent=i;
+    btn.className=`px-3 py-1 rounded ${i===currentPage?"bg-blue-500 text-white":"bg-gray-200 dark:bg-gray-700"}`;
+    btn.addEventListener("click",()=>{currentPage=i; renderTable(allData); renderPagination(data);}); pagination.appendChild(btn);
+  }
+}
+
+// Export
+document.getElementById("exportCSV").addEventListener("click",()=>exportData("csv"));
+document.getElementById("exportXLSX").addEventListener("click",()=>exportData("xlsx"));
+function exportData(type){
+  let filtered=allData;
+  if(type==="csv"){ const csvContent=[headers.join(",")].concat(filtered.map(r=>headers.map(h=>`"${(r[h]||"").replace(/"/g,'""')}"`).join(","))).join("\n");
+    const blob=new Blob([csvContent],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="data_export.csv"; a.click(); URL.revokeObjectURL(url);
+  } else { const ws=XLSX.utils.json_to_sheet(filtered,{header:headers}); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Sheet1"); XLSX.writeFile(wb,"data_export.xlsx"); }
+}
+
+// Charts
+function updateCharts(){
+  const sheetCount={}, colCount={}, dateCount={};
+  allData.forEach(r=>{sheetCount[r._sheet]=(sheetCount[r._sheet]||0)+1; headers.forEach(h=>colCount[h]=(colCount[h]||0)+1); const dateCol=headers.find(h=>h.toLowerCase().includes("date")); if(dateCol && r[dateCol]){const d=r[dateCol]; dateCount[d]=(dateCount[d]||0)+1;} });
+
+  // Sheet Pie
+  const ctxSheet=document.getElementById("chartSheet").getContext("2d"); if(chartSheet) chartSheet.destroy();
+  chartSheet=new Chart(ctxSheet,{type:"pie",data:{labels:Object.keys(sheetCount),datasets:[{label:"Dòng theo Sheet",data:Object.values(sheetCount),backgroundColor:["#3B82F6","#F97316","#10B981","#F59E0B","#8B5CF6"]}]},options:{responsive:true,onClick:(evt,item)=>{if(item.length>0){const idx=item[0].index; filterValue={sheet:Object.keys(sheetCount)[idx]}; currentPage=1; renderTable(allData); renderPagination(allData);}}}});
+
+  // Column Bar
+  const ctxCol=document.getElementById("chartColumn").getContext("2d"); if(chartColumn) chartColumn.destroy();
+  chartColumn=new Chart(ctxCol,{type:"bar",data:{labels:Object.keys(colCount),datasets:[{label:"Số lượng theo Cột",data:Object.values(colCount),backgroundColor:"#3B82F6"}]},options:{responsive:true,onClick:(evt,item)=>{if(item.length>0){const idx=item[0].index; filterValue={col:Object.keys(colCount)[idx],val:""}; currentPage=1; renderTable(allData); renderPagination(allData);}}}});
+
+  // Line Chart
+  const ctxLine=document.getElementById("chartLine").getContext("2d"); if(chartLine) chartLine.destroy();
+  const sortedDates=Object.keys(dateCount).sort((a,b)=>new Date(a)-new Date(b)); const dataPoints=sortedDates.map(d=>dateCount[d]);
+  chartLine=new Chart(ctxLine,{type:"line",data:{labels:sortedDates,datasets:[{label:"Trend theo Ngày",data:dataPoints,fill:false,borderColor:"#F97316",tension:0.3}]},options:{responsive:true}});
+}
+
+// Auto Refresh
+setInterval(loadData,5*60*1000);
+loadData();
 </script>
-
 </body>
 </html>
